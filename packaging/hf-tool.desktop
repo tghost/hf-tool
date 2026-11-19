@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=便携OCR
+Comment=离线文字识别：拍照取字，支持中英文
+Exec=/usr/share/APPLaunch/bin/hf-tool
+Icon=/usr/share/APPLaunch/share/images/hf-tool.png
+Terminal=false
+Categories=Utility;TextTools;
+Keywords=ocr;text;scan;document;camera;便携;识别;文字;
