@@ -132,6 +132,8 @@ EOF
 chmod 0755 "$STAGE/DEBIAN/postrm"
 
 cp "$HERE/../LICENSE" "$STAGE/usr/share/doc/$PKG/LICENSE" 2>/dev/null || true
+# Ship the headless self-test so the app can be verified on the device itself.
+cp "$HERE/selftest.py" "$STAGE/usr/share/doc/$PKG/selftest.py" 2>/dev/null || true
 
 chmod 0755 "$STAGE/DEBIAN"
 dpkg-deb --build --root-owner-group "$STAGE" "$DEB"
