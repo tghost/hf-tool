@@ -10,6 +10,7 @@ import sys
 import time
 
 from . import camera as camera_mod
+from . import diag
 from . import export as export_mod
 from . import imaging
 from . import ocr
@@ -31,6 +32,12 @@ HOME_ITEMS = [
     ("保存上次结果", "export"),
     ("退出", "quit"),
 ]
+
+# After a capture the app shows what the camera actually saw for a moment
+# before running the OCR. Without this the user has no way to tell a bad
+# capture (out of focus, too far away, wrong side up) from an engine
+# problem, and every such case looks the same from the outside.
+SHOW_CAPTURE_MS = 2500
 
 
 class App:
@@ -86,6 +93,24 @@ class App:
 
     # ---------- actions ----------
 
+    def show_capture(self, frame):
+        """Draw the captured frame onto the panel.
+
+        This is the single most useful diagnostic in the app: the user can
+        photograph the CardputerZero screen and we immediately see whether
+        the camera was focused, whether the page filled the frame and
+        whether the text was the right way up.
+        """
+        d = self.display
+        thumb = diag.thumbnail(frame, d.width, d.height - 18)
+        d.clear()
+        d.image.paste(thumb.convert("RGB"), (0, 0))
+        d.rect((0, 0, d.width, 18), fill=(24, 28, 38))
+        d.text((4, 3), "拍摄画面", size=12, color=ACCENT, bold=True)
+        d.text((d.width - d.text_width("清晰度 %d" % int(diag.focus_score(frame)), 10) - 4, 3),
+               "清晰度 %d" % int(diag.focus_score(frame)), size=10, color=MUTED)
+        d.flush()
+
     def do_capture(self):
         """Capture, gate on quality, run OCR and show the paged result."""
         d = self.display
@@ -103,6 +128,11 @@ class App:
             self.toast("拍照失败: %s" % str(exc)[:24], "err")
             return
 
+        # Show what the camera saw before spending 10+ seconds on OCR, and
+        # keep it on screen long enough to be photographed.
+        self.show_capture(frame)
+        self.keys.read_key(timeout=SHOW_CAPTURE_MS / 1000.0)
+
         # Quality gate before spending 10+ seconds on OCR.
         try:
             imaging.check_quality(frame)
@@ -111,12 +141,20 @@ class App:
             self.toast(exc.args[0][:24], "warn")
             self.render_status("提示: " + hint[:30], WARN)
             self.keys.read_key(timeout=3.0)
+            diag.dump("capture", raw=frame,
+                      meta={"focus": round(diag.focus_score(frame), 1),
+                            "stats": imaging.measure(frame)})
             return
 
         self.render_status("识别中，约 10 秒...")
         prepared = imaging.prepare(frame)
         text, elapsed = ocr.run(prepared)
         text = ocr.postprocess(text)
+        diag.dump("capture", raw=frame, prepared=prepared,
+                  meta={"focus": round(diag.focus_score(frame), 1),
+                        "stats": imaging.measure(frame),
+                        "elapsed": round(elapsed, 2),
+                        "chars": len(text)})
         # A frame that passes the brightness gates can still be too blurred or
         # too badly shadowed to read; in that case tesseract returns a few
         # stray characters instead of text, so warn and ask for a retake
